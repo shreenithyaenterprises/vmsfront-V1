@@ -58,6 +58,24 @@ export const loadRuntimeConfig = async () => {
 
 export const getApiBaseUrl = async (fallback = DEFAULT_BASE_URL) => {
   const config = await loadRuntimeConfig();
-  const baseUrl = config.API_BASE_URL || config.apiBaseUrl || import.meta.env.VITE_API_BASE_URL || fallback;
-  return String(baseUrl).replace(/\/$/, '');
+  const runtimeUrl = config.API_BASE_URL || config.apiBaseUrl;
+  const envUrl = import.meta.env.VITE_API_BASE_URL;
+
+  // 1. If config.json explicitly specifies a full URL (e.g. https://vmsbd.snithya.com/api), use it
+  if (runtimeUrl && /^https?:\/\//i.test(runtimeUrl)) {
+    return String(runtimeUrl).replace(/\/$/, '');
+  }
+
+  // 2. If VITE_API_BASE_URL is configured in .env, use it
+  if (envUrl) {
+    return String(envUrl).replace(/\/$/, '');
+  }
+
+  // 3. If config.json has any relative path
+  if (runtimeUrl) {
+    return String(runtimeUrl).replace(/\/$/, '');
+  }
+
+  // 4. Fallback to default (/api)
+  return String(fallback).replace(/\/$/, '');
 };
