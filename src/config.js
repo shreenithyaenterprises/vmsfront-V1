@@ -1,4 +1,5 @@
-const DEFAULT_BASE_URL = '/api';
+const DEFAULT_LOCAL_BASE_URL = '/api';
+const DEFAULT_PROD_BASE_URL = 'https://vmsbd.snithya.com/api';
 
 let runtimeConfig = null;
 let runtimeConfigPromise = null;
@@ -43,7 +44,6 @@ export const loadRuntimeConfig = async () => {
         }
         return runtimeConfig;
       } catch (error) {
-        console.warn('Runtime config could not be loaded:', error);
         runtimeConfig = { ...getGlobalConfig() };
         if (typeof window !== 'undefined') {
           window.__APP_CONFIG__ = runtimeConfig;
@@ -56,26 +56,42 @@ export const loadRuntimeConfig = async () => {
   return runtimeConfigPromise;
 };
 
-export const getApiBaseUrl = async (fallback = DEFAULT_BASE_URL) => {
+const isLocalHostname = (hostname) => {
+  if (!hostname) return true;
+  if (hostname === 'localhost' || hostname === '127.0.0.1') return true;
+  if (/^127\.\d+\.\d+\.\d+$/.test(hostname)) return true;
+  if (/^10\.\d+\.\d+\.\d+$/.test(hostname)) return true;
+  if (/^192\.168\.\d+\.\d+$/.test(hostname)) return true;
+  if (/^172\.(1[6-9]|2\d|3[01])\.\d+\.\d+$/.test(hostname)) return true;
+  return false;
+};
+
+export const getApiBaseUrl = async () => {
+  const currentHost = typeof window !== 'undefined' ? window.location.hostname : '';
+  const isLocal = isLocalHostname(currentHost);
+
+  // If running locally, route through local proxy /api
+  if (isLocal) {
+    const envUrl = import.meta.env.VITE_API_BASE_URL;
+    if (envUrl && !/^https:\/\/vmsbd\.snithya\.com/i.test(envUrl)) {
+      return String(envUrl).replace(/\/$/, '');
+    }
+    return DEFAULT_LOCAL_BASE_URL;
+  }
+
+  // When running on server domain (vms.snithya.com or any production domain):
   const config = await loadRuntimeConfig();
   const runtimeUrl = config.API_BASE_URL || config.apiBaseUrl;
   const envUrl = import.meta.env.VITE_API_BASE_URL;
 
-  // 1. If config.json explicitly specifies a full URL (e.g. https://vmsbd.snithya.com/api), use it
   if (runtimeUrl && /^https?:\/\//i.test(runtimeUrl)) {
     return String(runtimeUrl).replace(/\/$/, '');
   }
 
-  // 2. If VITE_API_BASE_URL is configured in .env, use it
-  if (envUrl) {
+  if (envUrl && /^https?:\/\//i.test(envUrl)) {
     return String(envUrl).replace(/\/$/, '');
   }
 
-  // 3. If config.json has any relative path
-  if (runtimeUrl) {
-    return String(runtimeUrl).replace(/\/$/, '');
-  }
-
-  // 4. Fallback to default (/api)
-  return String(fallback).replace(/\/$/, '');
+  // Default server backend API
+  return DEFAULT_PROD_BASE_URL;
 };
